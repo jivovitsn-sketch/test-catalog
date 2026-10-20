@@ -13,13 +13,14 @@ Stateless: FSM не используется, состояние — тольк�
 import asyncio
 import io
 import logging
-import os
 import uuid
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 
 import asyncpg
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 from aiogram.types import (
@@ -29,8 +30,28 @@ from aiogram.types import (
     WebAppInfo,
 )
 from minio import Minio
+from python_socks import ProxyType
+from aiohttp_socks import ProxyConnector
 
 from bot.config import ADMIN_IDS, settings
+
+
+class _RdnsSession(AiohttpSession):
+    """AiohttpSession с принудительным rdns: DNS резолвится на стороне
+    SOCKS-сервера. Локальный DNS может отдавать отравленные адреса
+    Telegram — тогда socks5:// с локальным резолвом просто виснет."""
+
+    def _setup_proxy_connector(self, proxy: str) -> None:
+        parsed = urlparse(proxy)
+        self._connector_type = ProxyConnector
+        self._connector_init = {
+            **self._connector_init,
+            "proxy_type": ProxyType.SOCKS5,
+            "host": parsed.hostname,
+            "port": parsed.port or 1080,
+            "rdns": True,
+        }
+        self._proxy = proxy
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("bot")
@@ -133,10 +154,23 @@ async def main() -> None:
     )
     await ensure_bucket()
 
+    session = _RdnsSession(proxy=settings.tg_proxy) if settings.tg_proxy else None
     bot = Bot(
         token=settings.bot_token,
+        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
+
+    # Один poller на токен: параллельные getUpdates получают 409.
+    # Масштабирование бота — webhook за балансировщиком + дедуп по
+    # update_id (см. README). Состояние в процессе отсутствует.
+    while True:
+        try:
+            await bot.delete_webhook(drop_pending_updates=True)  # зачистка старых апдейтов
+            break
+        except Exception as e:  # сеть/прокси могли ещё не подняться
+            log.warning("telegram not reachable yet: %s; retry in 10s", e)
+            await asyncio.sleep(10)
     dp = Dispatcher()
     dp.include_router(Router())
 

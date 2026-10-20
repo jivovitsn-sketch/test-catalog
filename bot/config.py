@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     minio_public_base_url: str = "http://localhost:9000"
     # HTTPS-адрес каталога для кнопки Mini App (Telegram требует https)
     web_app_url: str = "https://example.com"
+    # Необязательный прокси до Telegram API (socks5://host:port) — для сетей,
+    # где api.telegram.org недоступен напрямую. Пусто = ходить напрямую.
+    tg_proxy: str = ""
 
 
 settings = Settings()
