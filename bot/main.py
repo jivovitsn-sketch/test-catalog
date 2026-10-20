@@ -72,8 +72,17 @@ def catalog_keyboard() -> InlineKeyboardMarkup:
 
 
 async def ensure_bucket() -> None:
-    if not await asyncio.to_thread(s3.bucket_exists, settings.minio_bucket):
-        await asyncio.to_thread(s3.make_bucket, settings.minio_bucket)
+    # S3 может подниматься дольше БД (у SeaweedFS filer бутстрапится ~15с) —
+    # не падаем, а ждём
+    for attempt in range(1, 31):
+        try:
+            if not await asyncio.to_thread(s3.bucket_exists, settings.minio_bucket):
+                await asyncio.to_thread(s3.make_bucket, settings.minio_bucket)
+            return
+        except Exception as e:
+            log.warning("S3 not ready (%s), retry %s/30", e, attempt)
+            await asyncio.sleep(2)
+    raise RuntimeError("S3 storage unavailable after 30 retries")
 
 
 @F.message(CommandStart())

@@ -1,0 +1,13 @@
+[Unit]
+Description=test-catalog S3 (SeaweedFS, minio-compatible)
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/root/tc-s3
+ExecStart=/root/tc-s3/weed server -dir=/root/tc-s3/data -ip=0.0.0.0 -master.port=9333 -volume.port=9334 -filer -s3 -s3.port=9000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

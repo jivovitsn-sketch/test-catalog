@@ -1,0 +1,77 @@
+# Вариант стека для VPS, где образы MinIO недоступны (Docker Hub вырезал
+# minio/*, quay.io закрыт): S3 = SeaweedFS (S3-совместимый, minio-SDK
+# совместим) как бинарник на хосте, compose ходит к нему через host-gateway
+# под именем minio. Запуск:
+#   docker compose -f deploy/docker-compose.vps.yml up --build -d
+# SeaweedFS на хосте (systemd: deploy/seaweedfs.service):
+#   weed server -dir=/root/tc-s3/data -ip=127.0.0.1 \
+#     -master.port=9333 -volume.port=9334 -filer -s3 -s3.port=9000
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: catalog
+      POSTGRES_PASSWORD: catalog
+      POSTGRES_DB: catalog
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catalog -d catalog"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://catalog:catalog@postgres:5432/catalog
+      MINIO_PUBLIC_BASE_URL: ${MINIO_PUBLIC_BASE_URL:-http://localhost:9000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  bot:
+    build: ./bot
+    restart: unless-stopped
+    env_file: ./bot/.env
+    environment:
+      DATABASE_URL: postgresql://catalog:catalog@postgres:5432/catalog
+      MINIO_ENDPOINT: minio:9000
+      MINIO_SECURE: "false"
+    extra_hosts:
+      # имя minio указывает на S3-сервер на хосте
+      - "minio:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://api:8000
+    depends_on:
+      - api
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    extra_hosts:
+      - "minio:host-gateway"
+    depends_on:
+      - web
+      - api
+
+volumes:
+  pgdata:
