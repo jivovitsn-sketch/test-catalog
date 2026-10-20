@@ -85,7 +85,10 @@ async def ensure_bucket() -> None:
     raise RuntimeError("S3 storage unavailable after 30 retries")
 
 
-@F.message(CommandStart())
+router = Router()
+
+
+@router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
     if message.from_user and message.from_user.id in ADMIN_IDS:
         await message.answer(
@@ -102,7 +105,7 @@ async def cmd_start(message: Message) -> None:
         )
 
 
-@F.message(F.photo)
+@router.message(F.photo)
 async def photo_with_caption(message: Message, bot: Bot) -> None:
     if not message.from_user or message.from_user.id not in ADMIN_IDS:
         await message.answer("Создание товаров доступно только администратору.")
@@ -143,7 +146,7 @@ async def photo_with_caption(message: Message, bot: Bot) -> None:
     await message.answer(f"Товар создан: #{product_id} «{name}».")
 
 
-@F.message(F.text)
+@router.message(F.text)
 async def fallback_text(message: Message) -> None:
     await message.answer(
         "У меня есть товары 🛒",
@@ -181,12 +184,11 @@ async def main() -> None:
             log.warning("telegram not reachable yet: %s; retry in 10s", e)
             await asyncio.sleep(10)
     dp = Dispatcher()
-    dp.include_router(Router())
+    dp.include_router(router)
 
     # Один poller на токен: параллельные getUpdates получают 409.
     # Масштабирование бота — webhook за балансировщиком + дедуп по
     # update_id (см. README). Состояние в процессе отсутствует.
-    await bot.delete_webhook(drop_pending_updates=True)  # зачистка старых апдейтов
     try:
         await dp.start_polling(bot)
     finally:
