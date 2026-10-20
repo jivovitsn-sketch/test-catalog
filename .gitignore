@@ -1,0 +1,13 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# node
+web/node_modules/
+web/.next/
+web/*.tsbuildinfo
+
+# local run artifacts
+*.log
