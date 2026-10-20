@@ -2,11 +2,16 @@
 диалоги без FSM, данные — в PostgreSQL, файлы — в MinIO.
 """
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=Path(__file__).resolve().parent / ".env",
+        extra="ignore",
+    )
 
     bot_token: str
     admin_ids: str = ""  # telegram id через запятую

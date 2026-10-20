@@ -75,7 +75,7 @@ uvicorn main:app --port 8010
 # Бот
 cd bot && pip install -r requirements.txt
 cp .env.example .env   # заполнить
-python -m bot.main
+cd .. && python -m bot.main   # запуск из корня репозитория (пакетный импорт)
 
 # Web
 cd web && npm install && npm run build

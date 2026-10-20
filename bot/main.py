@@ -30,7 +30,7 @@ from aiogram.types import (
 )
 from minio import Minio
 
-from config import ADMIN_IDS, settings
+from bot.config import ADMIN_IDS, settings
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("bot")
@@ -143,7 +143,7 @@ async def main() -> None:
     # Один poller на токен: параллельные getUpdates получают 409.
     # Масштабирование бота — webhook за балансировщиком + дедуп по
     # update_id (см. README). Состояние в процессе отсутствует.
-    await bot.delete_webhook(drop_pending_updates=False)
+    await bot.delete_webhook(drop_pending_updates=True)  # зачистка старых апдейтов
     try:
         await dp.start_polling(bot)
     finally:
